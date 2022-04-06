@@ -59,6 +59,67 @@ type Response struct {
 	Seasons []interface{} `json:"seasons"`
 }
 
+const (
+	TL string = "┌" // top-left
+	TM string = "┬" // top-mid
+	TR string = "┐" // top-right
+	ML string = "├" // mid-left
+	MM string = "┼" // mid-mid
+	MR string = "┤" // mid-right
+	BL string = "└" // bottom-left
+	BM string = "┴" // bottom-mid
+	BR string = "┘" // bottom-right
+	VE string = "─" // vertical
+	HO string = "│" // horizontal
+)
+
+type Table struct {
+	Header         []string
+	Rows           [][]string
+	Size           int
+	MaxColumnSizes []int
+}
+
+func NewTable(s int) *Table {
+	t := &Table{Header: []string{}, Rows: [][]string{}, Size: s}
+	t.MaxColumnSizes = make([]int, t.Size)
+	return t
+}
+
+func (t *Table) SetHeader(columns []string) {
+	if len(columns) != t.Size {
+		log.Fatal("Number of columns does not match with size ", t.Size)
+	}
+	t.Header = columns
+	t.UpdateMaxColumnSizes(columns)
+}
+
+func (t *Table) AppendRow(row []string) {
+	if len(row) != t.Size {
+		log.Fatal("Number of columns does not match with size ", t.Size)
+	}
+	t.Rows = append(t.Rows, row)
+	t.UpdateMaxColumnSizes(row)
+}
+
+func (t *Table) UpdateMaxColumnSizes(records []string) {
+	for i := 0; i < t.Size; i++ {
+		if len(records[i]) > t.MaxColumnSizes[i] {
+			t.MaxColumnSizes[i] = len(records[i])
+		}
+	}
+}
+
+func (t *Table) Display() {
+	fmt.Println("┌──────┬────────┐")
+	fmt.Println("│", t.Header[0], "│", t.Header[1], "│")
+	fmt.Println("├──────┼────────┤")
+	for _, row := range t.Rows {
+		fmt.Println("│", row[0], " │    ", row[1], "│")
+	}
+	fmt.Println("└──────┴────────┘")
+}
+
 func main() {
 	// Create new http client
 	client := &http.Client{}
@@ -89,10 +150,9 @@ func main() {
 	var dat Response
 	json.NewDecoder(res.Body).Decode(&dat)
 
-	// Print table
-	fmt.Println("+------|--------+")
-	fmt.Println("| Team | Points |")
-	fmt.Println("+======|========+")
+	// Generate table
+	standings := NewTable(2)
+	standings.SetHeader([]string{"Team", "Points"})
 	for _, i := range dat.Children[0].Standings.Entries {
 		var points string
 		for _, j := range i.Stats {
@@ -100,7 +160,8 @@ func main() {
 				points = j.DisplayValue
 			}
 		}
-		fmt.Println("|", i.Team.Abbreviation, " |    ", points, "|")
-		fmt.Println("+------|--------+")
+		standings.AppendRow([]string{i.Team.Abbreviation, points})
 	}
+	// Print table
+	standings.Display()
 }
