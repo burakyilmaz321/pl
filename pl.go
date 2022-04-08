@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 )
 
 const hostname string = "https://site.web.api.espn.com/apis/v2/sports/soccer/eng.1/standings"
@@ -73,6 +74,20 @@ const (
 	HO string = "│" // horizontal
 )
 
+func adjustLeft(s string, l int) string {
+	sLen := len(s)
+	p := ""
+	p = fmt.Sprint(s, strings.Repeat(" ", l-sLen))
+	return p
+}
+
+func adjustRight(s string, l int) string {
+	sLen := len(s)
+	p := ""
+	p = fmt.Sprint(strings.Repeat(" ", l-sLen), s)
+	return p
+}
+
 type Table struct {
 	Header         []string
 	Rows           [][]string
@@ -111,13 +126,61 @@ func (t *Table) UpdateMaxColumnSizes(records []string) {
 }
 
 func (t *Table) Display() {
-	fmt.Println("┌──────┬────────┐")
-	fmt.Println("│", t.Header[0], "│", t.Header[1], "│")
-	fmt.Println("├──────┼────────┤")
-	for _, row := range t.Rows {
-		fmt.Println("│", row[0], " │    ", row[1], "│")
+	// Top border
+	topBorder := ""
+	topBorder = fmt.Sprint(topBorder, TL)
+	for i, colSize := range t.MaxColumnSizes {
+		topBorder = fmt.Sprint(topBorder, strings.Repeat(VE, colSize+2))
+		if i != t.Size-1 {
+			topBorder = fmt.Sprint(topBorder, TM)
+		}
 	}
-	fmt.Println("└──────┴────────┘")
+	topBorder = fmt.Sprint(topBorder, TR)
+	fmt.Println(topBorder)
+	// Header
+	header := ""
+	header = fmt.Sprint(header, HO, " ")
+	for i, col := range t.Header {
+		header = fmt.Sprint(header, adjustLeft(col, t.MaxColumnSizes[i]))
+		header = fmt.Sprint(header, " ", HO, " ")
+	}
+	fmt.Println(header)
+	// Middle border
+	middleBorder := ""
+	middleBorder = fmt.Sprint(middleBorder, ML)
+	for i, colSize := range t.MaxColumnSizes {
+		middleBorder = fmt.Sprint(middleBorder, strings.Repeat(VE, colSize+2))
+		if i != t.Size-1 {
+			middleBorder = fmt.Sprint(middleBorder, MM)
+		}
+	}
+	middleBorder = fmt.Sprint(middleBorder, MR)
+	fmt.Println(middleBorder)
+	// Rows
+	for _, row := range t.Rows {
+		rows := ""
+		rows = fmt.Sprint(rows, HO, " ")
+		for i, col := range row {
+			if i == 0 {
+				rows = fmt.Sprint(rows, adjustLeft(col, t.MaxColumnSizes[i]))
+			} else {
+				rows = fmt.Sprint(rows, adjustRight(col, t.MaxColumnSizes[i]))
+			}
+			rows = fmt.Sprint(rows, " ", HO, " ")
+		}
+		fmt.Println(rows)
+	}
+	// Bottom border
+	bottomBorder := ""
+	bottomBorder = fmt.Sprint(bottomBorder, BL)
+	for i, colSize := range t.MaxColumnSizes {
+		bottomBorder = fmt.Sprint(bottomBorder, strings.Repeat(VE, colSize+2))
+		if i != t.Size-1 {
+			bottomBorder = fmt.Sprint(bottomBorder, BM)
+		}
+	}
+	bottomBorder = fmt.Sprint(bottomBorder, BR)
+	fmt.Println(bottomBorder)
 }
 
 func main() {
@@ -160,7 +223,7 @@ func main() {
 				points = j.DisplayValue
 			}
 		}
-		standings.AppendRow([]string{i.Team.Abbreviation, points})
+		standings.AppendRow([]string{i.Team.DisplayName, points})
 	}
 	// Print table
 	standings.Display()
