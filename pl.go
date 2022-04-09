@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const hostname string = "https://site.web.api.espn.com/apis/v2/sports/soccer/eng.1/standings"
+const HOSTNAME string = "https://site.web.api.espn.com/apis/v2/sports/soccer/eng.1/standings"
 
 type Response struct {
 	Uid         string `json:"uid"`
@@ -89,15 +89,19 @@ func adjustRight(s string, l int) string {
 }
 
 type Table struct {
-	Header         []string
-	Rows           [][]string
-	Size           int
-	MaxColumnSizes []int
+	Header           []string
+	Rows             [][]string
+	Size             int
+	MaxColumnSizes   []int
+	Padding          int
+	ColumnAlignments []int
 }
 
-func NewTable(s int) *Table {
+func NewTable(s int, alignments []int) *Table {
 	t := &Table{Header: []string{}, Rows: [][]string{}, Size: s}
 	t.MaxColumnSizes = make([]int, t.Size)
+	t.Padding = 1
+	t.ColumnAlignments = alignments
 	return t
 }
 
@@ -125,88 +129,88 @@ func (t *Table) UpdateMaxColumnSizes(records []string) {
 	}
 }
 
+func (t *Table) BuildBorder(left string, middle string, right string) string {
+	cols := make([]string, t.Size)
+	for i := 0; i < t.Size; i++ {
+		cols[i] = fmt.Sprint(strings.Repeat(VE, t.MaxColumnSizes[i]+t.Padding*2))
+	}
+	return fmt.Sprint(left, strings.Join(cols, middle), right)
+}
+
+func (t *Table) BuildRowLine(row []string, columnAlignments []int) string {
+	cols := make([]string, t.Size)
+	for i := 0; i < t.Size; i++ {
+		alignment := columnAlignments[i]
+		switch alignment {
+		case 0:
+			cols[i] = adjustLeft(row[i], t.MaxColumnSizes[i])
+		case 1:
+			cols[i] = adjustRight(row[i], t.MaxColumnSizes[i])
+		}
+		cols[i] = fmt.Sprint(strings.Repeat(" ", t.Padding), cols[i], strings.Repeat(" ", t.Padding))
+	}
+	return fmt.Sprint(HO, strings.Join(cols, HO), HO)
+}
+
 func (t *Table) Display() {
 	// Top border
-	topBorder := ""
-	topBorder = fmt.Sprint(topBorder, TL)
-	for i, colSize := range t.MaxColumnSizes {
-		topBorder = fmt.Sprint(topBorder, strings.Repeat(VE, colSize+2))
-		if i != t.Size-1 {
-			topBorder = fmt.Sprint(topBorder, TM)
-		}
-	}
-	topBorder = fmt.Sprint(topBorder, TR)
+	topBorder := t.BuildBorder(TL, TM, TR)
 	fmt.Println(topBorder)
 	// Header
-	header := ""
-	header = fmt.Sprint(header, HO, " ")
-	for i, col := range t.Header {
-		header = fmt.Sprint(header, adjustLeft(col, t.MaxColumnSizes[i]))
-		header = fmt.Sprint(header, " ", HO, " ")
-	}
+	header := t.BuildRowLine(t.Header, []int{0, 0})
 	fmt.Println(header)
 	// Middle border
-	middleBorder := ""
-	middleBorder = fmt.Sprint(middleBorder, ML)
-	for i, colSize := range t.MaxColumnSizes {
-		middleBorder = fmt.Sprint(middleBorder, strings.Repeat(VE, colSize+2))
-		if i != t.Size-1 {
-			middleBorder = fmt.Sprint(middleBorder, MM)
-		}
-	}
-	middleBorder = fmt.Sprint(middleBorder, MR)
+	middleBorder := t.BuildBorder(ML, MM, MR)
 	fmt.Println(middleBorder)
 	// Rows
 	for _, row := range t.Rows {
-		rows := ""
-		rows = fmt.Sprint(rows, HO, " ")
-		for i, col := range row {
-			if i == 0 {
-				rows = fmt.Sprint(rows, adjustLeft(col, t.MaxColumnSizes[i]))
-			} else {
-				rows = fmt.Sprint(rows, adjustRight(col, t.MaxColumnSizes[i]))
-			}
-			rows = fmt.Sprint(rows, " ", HO, " ")
-		}
-		fmt.Println(rows)
+		fmt.Println(t.BuildRowLine(row, t.ColumnAlignments))
 	}
 	// Bottom border
-	bottomBorder := ""
-	bottomBorder = fmt.Sprint(bottomBorder, BL)
-	for i, colSize := range t.MaxColumnSizes {
-		bottomBorder = fmt.Sprint(bottomBorder, strings.Repeat(VE, colSize+2))
-		if i != t.Size-1 {
-			bottomBorder = fmt.Sprint(bottomBorder, BM)
-		}
-	}
-	bottomBorder = fmt.Sprint(bottomBorder, BR)
+	bottomBorder := t.BuildBorder(BL, BM, BR)
 	fmt.Println(bottomBorder)
 }
 
-func main() {
+func Get(url string, params map[string]string) (*http.Response, error) {
 	// Create new http client
 	client := &http.Client{}
 
 	// Create new http request
-	req, err := http.NewRequest("GET", hostname, nil)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Add query string params to the request
 	queryParams := req.URL.Query()
-	queryParams.Add("region", "us")
-	queryParams.Add("lang", "en")
-	queryParams.Add("contentorigin", "soccernet")
-	queryParams.Add("season", "2021")
-	queryParams.Add("sort", "rank")
+
+	for param, value := range params {
+		queryParams.Add(param, value)
+	}
+
 	req.URL.RawQuery = queryParams.Encode()
 
 	// Execute the request
 	res, err := client.Do(req)
+
+	return res, err
+}
+
+func main() {
+	// Make GET request
+	queryParams := map[string]string{
+		"region":        "us",
+		"lang":          "en",
+		"contentorigin": "soccernet",
+		"season":        "2021",
+		"sort":          "rank",
+	}
+	res, err := Get(HOSTNAME, queryParams)
+
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	defer res.Body.Close()
 
 	// Parse response as struct
@@ -214,7 +218,7 @@ func main() {
 	json.NewDecoder(res.Body).Decode(&dat)
 
 	// Generate table
-	standings := NewTable(2)
+	standings := NewTable(2, []int{0, 1})
 	standings.SetHeader([]string{"Team", "Points"})
 	for _, i := range dat.Children[0].Standings.Entries {
 		var points string
